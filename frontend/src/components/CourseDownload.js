@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom'
 
 const CourseDownload = ({ selectedCoursesIDs }) => {
     const [isDownloading, setIsDownloading] = useState(false);
+    const navigate = useNavigate();
 
     const handleDownload = async () => {
         try {
@@ -16,7 +18,7 @@ const CourseDownload = ({ selectedCoursesIDs }) => {
             });
 
             if (response.status === 401) {
-                window.location.href = '/';
+                navigate('/');
             } else {
                 console.log('Download initiated successfully.');
                 generateDownloadLink();

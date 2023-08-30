@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const CourseSelection = ({ selectedCoursesIDs, onCourseSelection }) => {
     const [courses, setCourses] = useState([]);
     const [fetchingStatus, setFetchingStatus] = useState('loading'); // 'loading', 'success', 'error'
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchCourses();
@@ -16,7 +18,7 @@ const CourseSelection = ({ selectedCoursesIDs, onCourseSelection }) => {
             if (response.status === 401) {
                 setFetchingStatus('error');
                 console.error('Error fetching courses:', response.status);
-                window.location.href = 'http://localhost:3000/';
+                navigate('/')
             }
             const data = await response.json();
             setCourses(data);

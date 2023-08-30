@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
     const [loginError, setLoginError] = useState(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         login();
@@ -19,9 +21,9 @@ const Login = () => {
             if (response.status === 401) {
                 const authResponse = await fetch('http://localhost:8080/oauth/url');
                 const authData = await authResponse.json();
-                window.location.href = authData.url;
+                window.location.href = authData.url
             } else {
-                window.location.href = '/courses';
+                navigate('/courses')
             }
         } catch (error) {
             console.error('Error initiating login:', error);
