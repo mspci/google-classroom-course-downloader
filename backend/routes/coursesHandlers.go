@@ -7,24 +7,28 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/sessions"
-	"github.com/mspcix/google-classroom-downloader/database"
-	"github.com/mspcix/google-classroom-downloader/services"
+	"github.com/mspcix/google-classroom-course-downloader/database"
+	"github.com/mspcix/google-classroom-course-downloader/models"
+	"github.com/mspcix/google-classroom-course-downloader/services"
 
-	"github.com/mspcix/google-classroom-downloader/utils"
+	"github.com/mspcix/google-classroom-course-downloader/utils"
 )
 
 // Retrieves the list of new courses for the authenticated user from Google's Classroom API
 // Inserts them into the database
 func HandleDiscoverCourses(w http.ResponseWriter, r *http.Request, store sessions.Store) {
+	startDiscovery := time.Now()
+	log.Println("[HandleDiscoverCourses] /courses/discover hit")
 	token, err := database.GetTokenFromSession(r, store)
 	if err != nil {
 		log.Println("Error retrieving token from the database:", err)
 		return
 	}
 
-	courses, err := services.GetCourses(r, token)
+	courses, err := services.GetCoursesFromAPI(r, token)
 	if err != nil {
 		fmt.Println("Error retrieving courses:", err)
 		http.Error(w, "Failed to retrieve courses", http.StatusInternalServerError)
@@ -38,10 +42,9 @@ func HandleDiscoverCourses(w http.ResponseWriter, r *http.Request, store session
 		return
 	}
 
-	// Get new courses' IDs
 	newCoursesIDs := make([]string, len(newCourses))
 	for i, course := range newCourses {
-		newCoursesIDs[i] = course.ID
+		newCoursesIDs[i] = course.GCID
 	}
 
 	announcements, err := services.GetAnnouncements(r, token, newCoursesIDs)
@@ -51,21 +54,47 @@ func HandleDiscoverCourses(w http.ResponseWriter, r *http.Request, store session
 		return
 	}
 
-	// Sets the announcements of all courses
-	for i, course := range newCourses {
-		for _, announcement := range announcements {
-			if announcement.CourseID == course.ID {
-				newCourses[i].AddAnnouncement(&announcement)
-			}
-		}
-	}
-
-	err = database.InsertCourses(newCourses)
+	courseWorkMaterials, err := services.GetCourseWorkMaterials(r, token, newCoursesIDs)
 	if err != nil {
-		fmt.Println("Error inserting courses into the database:", err)
-		http.Error(w, "Failed to insert courses into the database", http.StatusInternalServerError)
+		fmt.Println("Error retrieving course work materials:", err)
+		http.Error(w, "Failed to retrieve course work materials", http.StatusInternalServerError)
 		return
 	}
+
+	// Create maps to store announcements and course work materials by course ID
+	announcementsMap := make(map[string][]models.Announcement)
+	for _, announcement := range announcements {
+		announcementsMap[announcement.CourseID] = append(announcementsMap[announcement.CourseID], announcement)
+	}
+	courseWorkMaterialsMap := make(map[string][]models.CourseWorkMaterial)
+	for _, courseWorkMaterial := range courseWorkMaterials {
+		courseWorkMaterialsMap[courseWorkMaterial.CourseID] = append(courseWorkMaterialsMap[courseWorkMaterial.CourseID], courseWorkMaterial)
+	}
+
+	// Sets the announcements and courseWorkMaterials of all courses
+	for i, course := range newCourses {
+		newCourses[i].Announcements = announcementsMap[course.GCID]
+		newCourses[i].CourseWorkMaterials = courseWorkMaterialsMap[course.GCID]
+	}
+
+	if len(newCourses) != 0 {
+		log.Println("Inserting new courses into the database...")
+		start := time.Now()
+		err = database.SaveCourses(newCourses)
+		if err != nil {
+			fmt.Println("Error inserting courses into the database:", err)
+
+			http.Error(w, "Failed to insert courses into the database", http.StatusInternalServerError)
+			return
+		}
+		elapsed := time.Since(start)
+		log.Printf("Courses successfully inserted into the database in %v", elapsed)
+	} else {
+		log.Println("No new courses to insert into the database")
+	}
+
+	elapsedDiscovery := time.Since(startDiscovery)
+	log.Printf("%v courses successfully discovered in %v", len(newCourses), elapsedDiscovery)
 
 	http.Redirect(w, r, os.Getenv("FRONTEND_COURSES_URL"), http.StatusSeeOther)
 }
@@ -73,6 +102,7 @@ func HandleDiscoverCourses(w http.ResponseWriter, r *http.Request, store session
 // Retrieves the list of courses for the authenticated user from the database
 // Sends them to the client as JSON
 func HandleListCourses(w http.ResponseWriter, r *http.Request, store sessions.Store) {
+	log.Println("[HandleListCourses] /courses/list hit")
 	token, err := database.GetTokenFromSession(r, store)
 	if err != nil {
 		log.Println("Error retrieving token from the database:", err)
@@ -101,6 +131,7 @@ func HandleListCourses(w http.ResponseWriter, r *http.Request, store sessions.St
 
 // Handles request to initiate material download
 func HandleDownloadCourses(w http.ResponseWriter, r *http.Request, store sessions.Store) {
+	log.Println("[HandleDownloadCourses] /courses/download hit")
 	// Parse the request body to get selected courses
 	var requestBody struct {
 		SelectedCourses []string `json:"selectedCoursesIDs"`
@@ -121,18 +152,28 @@ func HandleDownloadCourses(w http.ResponseWriter, r *http.Request, store session
 		log.Printf("Error during download: %v\n", err)
 	}
 
+	w.WriteHeader(http.StatusOK)
 }
 
 // Serves the downloaded courses to the client
 // Deletes local folders
 func HandleServeCourses(w http.ResponseWriter, r *http.Request) {
+	log.Println("[HandleServeCourses] /courses/serve hit")
 	// Remove the folder that was zipped
-	defer os.RemoveAll(utils.DownloadPath)
+	defer os.RemoveAll(utils.DownloadFolderPath)
 	// Remove the zip file
 	defer os.Remove(utils.ZipFilePath)
 
+	// if utils.DownloadFolderPath is an empty folder, then there is nothing to zip
+	// so we return an error
+	if isEmpty, err := utils.IsEmptyFolder(utils.DownloadFolderPath); isEmpty || err != nil {
+		http.Error(w, "Course Folder is empty.", http.StatusInternalServerError)
+		log.Printf("Error checking if folder is empty: %v\n", err)
+		return
+	}
+
 	// Create a zip file of the download folder
-	err := utils.ZipFolder(utils.DownloadPath)
+	err := utils.ZipFolder(utils.DownloadFolderPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
