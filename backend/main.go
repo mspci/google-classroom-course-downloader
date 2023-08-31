@@ -10,9 +10,9 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/rs/cors"
 
-	"github.com/mspcix/google-classroom-downloader/database"
-	"github.com/mspcix/google-classroom-downloader/routes"
-	"github.com/mspcix/google-classroom-downloader/utils"
+	"github.com/mspcix/google-classroom-course-downloader/database"
+	"github.com/mspcix/google-classroom-course-downloader/routes"
+	"github.com/mspcix/google-classroom-course-downloader/utils"
 )
 
 func main() {
@@ -21,6 +21,10 @@ func main() {
 		log.Fatal("Error initializing the environment:", err)
 		return
 	}
+
+	utils.InitLogger()
+	defer utils.Logger.Writer().(*os.File).Close()
+	defer utils.DBLogger.LogFile.Close()
 
 	err = utils.InitOauthConfig()
 	if err != nil {
@@ -39,13 +43,13 @@ func main() {
 		log.Fatal("Error getting the database connection:", err)
 		return
 	}
-
 	defer pgDB.Close()
 	defer db.Exec("CLOSE ALL")
 
 	r := mux.NewRouter()
 
 	cookieStore := sessions.NewCookieStore([]byte(os.Getenv("SESSION_KEY")))
+	cookieStore.Options.MaxAge = 60 * 60 * 24 // 1 day in seconds
 
 	// Apply CORS middleware to the router
 	corsMiddleware := cors.New(cors.Options{

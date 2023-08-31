@@ -9,9 +9,9 @@ import (
 	_ "github.com/lib/pq"
 	"golang.org/x/oauth2"
 
-	"github.com/mspcix/google-classroom-downloader/database"
-	"github.com/mspcix/google-classroom-downloader/services"
-	"github.com/mspcix/google-classroom-downloader/utils"
+	"github.com/mspcix/google-classroom-course-downloader/database"
+	"github.com/mspcix/google-classroom-course-downloader/services"
+	"github.com/mspcix/google-classroom-course-downloader/utils"
 )
 
 var storedState string
@@ -59,10 +59,25 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request, store sessions.
 		return
 	}
 
-	session, _ := store.Get(r, "GCD_session")
+	session, _ := store.Get(r, "gcd_session")
 	session.Values["authenticated"] = true
-	session.Values["GCUID"] = user.GCUID
+	session.Values["gcuid"] = user.GCUID
 	session.Save(r, w)
 
 	http.Redirect(w, r, "/courses/discover", http.StatusSeeOther)
+}
+
+func HandleLogout(w http.ResponseWriter, r *http.Request, store sessions.Store) {
+	log.Println("[HandleLogout] /logout hit")
+
+	session, _ := store.Get(r, "gcd_session")
+
+	// Delete the session data
+	session.Options.MaxAge = -1
+	if err := session.Save(r, w); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

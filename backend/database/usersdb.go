@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/sessions"
-	"github.com/mspcix/google-classroom-downloader/models"
+	"github.com/mspcix/google-classroom-course-downloader/models"
 	"gorm.io/gorm"
 )
 
@@ -73,8 +73,8 @@ func GetUserByGCUID(gcuid string) (*models.User, error) {
 // Get user's token from session data
 func GetTokenFromSession(r *http.Request, store sessions.Store) (string, error) {
 	// Retrieve the authenticated user's userID from the session
-	session, _ := store.Get(r, "GCD_session")
-	gcuid, ok := session.Values["GCUID"].(string)
+	session, _ := store.Get(r, "gcd_session")
+	gcuid, ok := session.Values["gcuid"].(string)
 	if !ok {
 		log.Println("userID not found in session")
 		return "", fmt.Errorf("userID not found in session")

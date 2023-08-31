@@ -26,7 +26,7 @@ func SetupRoutes(r *mux.Router, store sessions.Store) {
 func authMiddleware(next http.HandlerFunc, store sessions.Store) http.HandlerFunc {
 	log.Println("authMiddleware route hit")
 	return func(w http.ResponseWriter, r *http.Request) {
-		session, _ := store.Get(r, "GCD_session")
+		session, _ := store.Get(r, "gcd_session")
 		// Check if the user is authenticated
 		if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
 			log.Println("user is not authenticated (middleware function)")
@@ -48,7 +48,7 @@ func HandleHome(w http.ResponseWriter, r *http.Request, store sessions.Store) {
 	log.Println("home route hit")
 
 	// Check if the user has a session
-	session, _ := store.Get(r, "GCD_session")
+	session, _ := store.Get(r, "gcd_session")
 
 	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
 		w.WriteHeader(http.StatusUnauthorized)

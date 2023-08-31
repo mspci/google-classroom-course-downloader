@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/mspcix/google-classroom-downloader/models"
-	"github.com/mspcix/google-classroom-downloader/utils"
+	"github.com/mspcix/google-classroom-course-downloader/models"
+	"github.com/mspcix/google-classroom-course-downloader/utils"
 	"golang.org/x/oauth2"
 )
 

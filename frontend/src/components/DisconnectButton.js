@@ -8,7 +8,7 @@ const DisconnectButton = () => {
   const handleDisconnect = async () => {
     try {
       await fetch('http://localhost:8080/oauth/logout', { method: 'POST', credentials: 'include' });
-      document.cookie = 'GCD_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = 'gcd_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -17,8 +17,8 @@ const DisconnectButton = () => {
 
   return (
     <>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
       <button onClick={handleDisconnect}>Disconnect</button>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
     </>
   );
 };

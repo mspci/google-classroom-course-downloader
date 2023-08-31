@@ -8,34 +8,58 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/gorilla/sessions"
 	"github.com/joho/godotenv"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/drive/v2"
 	"google.golang.org/api/option"
+	"gorm.io/gorm/logger"
 )
 
-const (
-	DOWNLOAD_FOLDER_NAME string = "GC-Downloader"
-	DOWNLOAD_FOLDER      string = "Downloads"
-	ZIP_FILE_NAME        string = DOWNLOAD_FOLDER_NAME + ".zip"
-)
+type GormLogger struct {
+	LoggerInterface logger.Interface
+	LogFile         *os.File
+}
 
 var (
-	OAuthConfig     *oauth2.Config
-	DownloadPath, _        = DefineDownloadPath()
-	ZipFilePath     string = DownloadPath + ".zip"
+	SystemDownloadFolder  string
+	DownloadFolder        string
+	ZIP_FILE_NAME         string
+	OAuthConfig           *oauth2.Config
+	DownloadFolderPath, _ string
+	ZipFilePath           string
+	Logger                *log.Logger
+	DBLogger              GormLogger
 )
 
 func InitEnv() error {
 	if err := godotenv.Load(); err != nil {
 		return fmt.Errorf("error loading .env file: %w", err)
 	}
+
+	SystemDownloadFolder = os.Getenv("SYSTEM_DOWNLOAD_FOLDER")
+	DownloadFolder = os.Getenv("DOWNLOAD_FOLDER")
+
+	DownloadFolderPath = DefineDownloadPath()
+	ZIP_FILE_NAME = DownloadFolder + ".zip"
+	ZipFilePath = DownloadFolderPath + ".zip"
+
+	log.Println("------------------------------------------------------")
+	log.Println("------------------------------------------------------")
+	log.Printf("SystemDownloadFolder: %s\n", SystemDownloadFolder)
+	log.Printf("DownloadFolder: %s\n", DownloadFolder)
+	log.Printf("DownloadFolderPath: %s\n", DownloadFolderPath)
+	log.Printf("ZIP_FILE_NAME: %s\n", ZIP_FILE_NAME)
+	log.Printf("ZipFilePath: %s\n", ZipFilePath)
+	log.Println("------------------------------------------------------")
+	log.Println("------------------------------------------------------")
 
 	return nil
 }
@@ -70,7 +94,7 @@ func InitOauthConfig() error {
 
 func RemoveInvalidChars(fileName string) string {
 	// Define a regular expression pattern to match invalid characters
-	invalidCharPattern := regexp.MustCompile(`[<>:"/\\|?*]`)
+	invalidCharPattern := regexp.MustCompile(`[<>:"'/\\|?*]`)
 
 	// Replace invalid characters with an underscore
 	sanitizedFileName := invalidCharPattern.ReplaceAllString(fileName, "_")
@@ -107,7 +131,6 @@ func DownloadDriveFile(token, fileID, filePath string) error {
 		return err
 	}
 
-	log.Println("Finished downloading drive file...", fileID)
 	return nil
 }
 
@@ -206,15 +229,18 @@ func ZipFolder(sourceDir string) error {
 	return nil
 }
 
-func DefineDownloadPath() (string, error) {
+func DefineDownloadPath() string {
+	SystemDownloadFolder = os.Getenv("SYSTEM_DOWNLOAD_FOLDER")
+	DownloadFolder = os.Getenv("DOWNLOAD_FOLDER")
+
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", err
+		log.Fatal("Unable to get user's home directory:", err)
 	}
 
-	downloadPath := filepath.Join(userHomeDir, "Downloads", DOWNLOAD_FOLDER_NAME)
+	downloadPath := filepath.Join(userHomeDir, SystemDownloadFolder, DownloadFolder)
 
-	return downloadPath, nil
+	return downloadPath
 }
 
 // Generates a random session ID
@@ -229,4 +255,62 @@ func GenerateRandomID(IDlength int) string {
 
 	// Encode the random bytes as a base64 string
 	return base64.StdEncoding.EncodeToString(b)
+}
+
+func IsEmptyFolder(folderPath string) (bool, error) {
+	// Open the folder
+	folder, err := os.Open(folderPath)
+	if err != nil {
+		return false, err
+	}
+	defer folder.Close()
+
+	// Read in the files
+	files, err := folder.Readdir(0)
+	if err != nil {
+		return false, err
+	}
+
+	// Return true if the folder is empty
+	return len(files) == 0, nil
+}
+
+func InitLogger() {
+	logFile, err := os.OpenFile("app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal(err)
+	}
+	Logger = log.New(logFile, "", log.LstdFlags)
+
+	dbLogFile, err := os.OpenFile("gorm.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("error opening file: %v", err)
+	}
+
+	customGormLogger := logger.New(
+		log.New(dbLogFile, "\r\n", log.LstdFlags), // io writer
+		logger.Config{
+			SlowThreshold:             time.Second,  // Slow SQL threshold
+			LogLevel:                  logger.Error, // Log level
+			IgnoreRecordNotFoundError: false,        // Ignore ErrRecordNotFound error for logger
+			Colorful:                  false,        // Disable color
+		},
+	)
+
+	// Populate a GormLogger struct
+	DBLogger = GormLogger{
+		LoggerInterface: customGormLogger,
+		LogFile:         dbLogFile,
+	}
+}
+
+func GetGCUIDFromSession(r *http.Request, store sessions.Store) (string, error) {
+	session, _ := store.Get(r, "gcd_session")
+
+	gcuid, ok := session.Values["gcuid"].(string)
+	if !ok {
+		return "", fmt.Errorf("unable to get GCUID from session")
+	}
+
+	return gcuid, nil
 }

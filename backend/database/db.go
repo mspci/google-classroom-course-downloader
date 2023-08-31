@@ -6,7 +6,7 @@ import (
 
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
-	"github.com/mspcix/google-classroom-downloader/models"
+	"github.com/mspcix/google-classroom-course-downloader/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -33,12 +33,14 @@ func InitDB() (*gorm.DB, error) {
 	// 	os.Getenv("NDB_USER"), os.Getenv("NDB_PASSWORD"), os.Getenv("NDB_NAME"), os.Getenv("NDB_HOST"))
 
 	// Open a connection to the database using GORM
+
 	var err error
 	db, err = gorm.Open(postgres.New(postgres.Config{
 		DSN:                  connStr,
-		PreferSimpleProtocol: true, // disables implicit prepared statement usage
+		PreferSimpleProtocol: true,
 	}), &gorm.Config{
 		SkipDefaultTransaction: true,
+		// Logger:                 utils.DBLogger.LoggerInterface,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to PostgreSQL: %w", err)
@@ -47,7 +49,7 @@ func InitDB() (*gorm.DB, error) {
 	// Disable Logger to suppress GORM logging output for this operation
 	// db.Logger = logger.Default.LogMode(logger.Silent)
 
-	if err := db.AutoMigrate(&models.User{}, &models.Course{}, &models.Announcement{}, &models.Material{}, &models.DriveFile{}, &models.YoutubeVideo{}, &models.Link{}, &models.Form{}); err != nil {
+	if err := db.AutoMigrate(&models.User{}, &models.Course{}, &models.Announcement{}, &models.Material{}, &models.DriveFile{}, &models.YoutubeVideo{}, &models.Link{}, &models.Form{}, &models.CourseWorkMaterial{}); err != nil {
 		return nil, fmt.Errorf("error automigrating models: %w", err)
 	}
 

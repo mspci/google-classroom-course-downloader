@@ -12,16 +12,16 @@ import (
 
 	"golang.org/x/oauth2"
 
-	"github.com/mspcix/google-classroom-downloader/database"
-	"github.com/mspcix/google-classroom-downloader/models"
-	"github.com/mspcix/google-classroom-downloader/utils"
+	"github.com/mspcix/google-classroom-course-downloader/database"
+	"github.com/mspcix/google-classroom-course-downloader/models"
+	"github.com/mspcix/google-classroom-course-downloader/utils"
 )
 
 // Return courses that aren't present in the db.
 func FilterNewCourses(classrooms []models.Course) ([]models.Course, error) {
 	newClassrooms := []models.Course{}
 
-	existingClassroomsIDs, err := database.GetCoursesIDs()
+	existingClassroomsIDs, err := database.GetCoursesGCIDs()
 	if err != nil {
 		return newClassrooms, err
 	}
@@ -33,7 +33,7 @@ func FilterNewCourses(classrooms []models.Course) ([]models.Course, error) {
 	}
 
 	for _, classroom := range classrooms {
-		if !existingIDsMap[classroom.ID] {
+		if !existingIDsMap[classroom.GCID] {
 			newClassrooms = append(newClassrooms, classroom)
 		}
 	}
@@ -42,7 +42,7 @@ func FilterNewCourses(classrooms []models.Course) ([]models.Course, error) {
 }
 
 // Fetch the classrooms for the user using Google Classroom API
-func GetCourses(r *http.Request, token string) ([]models.Course, error) {
+func GetCoursesFromAPI(r *http.Request, token string) ([]models.Course, error) {
 	httpClient := utils.OAuthConfig.Client(r.Context(), &oauth2.Token{AccessToken: token})
 
 	// Makes a GET request to the Classroom API to retrieve the list of classrooms
@@ -106,7 +106,7 @@ func GetAnnouncements(r *http.Request, token string, coursesIDs []string) ([]mod
 				return nil, err
 			}
 
-			// Set the title and type of materials
+			// Set the title, type and url of materials
 			for i := range announcementsResponse.Announcements {
 				for j := range announcementsResponse.Announcements[i].Materials {
 					announcementsResponse.Announcements[i].Materials[j].SetTitleTypeURL()
@@ -126,17 +126,62 @@ func GetAnnouncements(r *http.Request, token string, coursesIDs []string) ([]mod
 	return announcements, nil
 }
 
+// Fetch the coursework materials of a list of courses using Google Classroom API
+func GetCourseWorkMaterials(r *http.Request, token string, courseIDs []string) ([]models.CourseWorkMaterial, error) {
+	httpClient := utils.OAuthConfig.Client(r.Context(), &oauth2.Token{AccessToken: token})
+
+	var allCourseWorkMaterials []models.CourseWorkMaterial
+
+	for _, courseID := range courseIDs {
+		nextPageToken := ""
+		for {
+			// Make a GET request to the Classroom API to retrieve the list of coursework materials
+			url := fmt.Sprintf("https://classroom.googleapis.com/v1/courses/%s/courseWorkMaterials?pageSize=50&pageToken=%s", courseID, nextPageToken)
+			response, err := httpClient.Get(url)
+			if err != nil {
+				return nil, err
+			}
+			defer response.Body.Close()
+
+			// Parse the response body to get the list of coursework materials
+			var courseWorkMaterialsResponse struct {
+				CourseWorkMaterials []models.CourseWorkMaterial `json:"courseWorkMaterial"`
+				NextPageToken       string                      `json:"nextPageToken"`
+			}
+			err = json.NewDecoder(response.Body).Decode(&courseWorkMaterialsResponse)
+			if err != nil {
+				return nil, err
+			}
+
+			// Set the title, type and url of materials
+			for i := range courseWorkMaterialsResponse.CourseWorkMaterials {
+				for j := range courseWorkMaterialsResponse.CourseWorkMaterials[i].Materials {
+					courseWorkMaterialsResponse.CourseWorkMaterials[i].Materials[j].SetTitleTypeURL()
+				}
+			}
+
+			allCourseWorkMaterials = append(allCourseWorkMaterials, courseWorkMaterialsResponse.CourseWorkMaterials...)
+
+			// Check if there are more pages to fetch
+			if courseWorkMaterialsResponse.NextPageToken == "" {
+				break
+			}
+			nextPageToken = courseWorkMaterialsResponse.NextPageToken
+		}
+	}
+
+	return allCourseWorkMaterials, nil
+}
+
 // Download courses' materials from links in the database
 func DownloadCourses(coursesIDs []string, token string) error {
+	log.Println("Downloading courses...")
 	courses, err := database.GetCoursesByIDs(coursesIDs)
 	if err != nil {
 		return err
 	}
 
-	// Use a WaitGroup to wait for all goroutines to finish
-	var downloadCompleteWG sync.WaitGroup
-
-	// Limit concurrent downloads
+	var wg sync.WaitGroup
 	maxConcurrentDownloadsStr := os.Getenv("MAX_CONCURRENT_DOWNLOADS")
 	maxConcurrentDownloads, err := strconv.Atoi(maxConcurrentDownloadsStr)
 	if err != nil {
@@ -144,54 +189,62 @@ func DownloadCourses(coursesIDs []string, token string) error {
 	}
 	semaphore := make(chan struct{}, maxConcurrentDownloads)
 
-	// Iterate over courses and announcements
+	var downloadItems []models.DownloadItem
+
 	for _, course := range courses {
-		courseFolderPath := filepath.Join(utils.DownloadPath, course.Name)
-		if err := os.MkdirAll(courseFolderPath, os.ModePerm); err != nil {
-			return err
-		}
-
-		for _, announcement := range course.Announcements {
-			creationDate := utils.MakeFolderNameFromTime(announcement.CreationTime)
-			announcementFolderPath := filepath.Join(courseFolderPath, creationDate)
-			if err := os.MkdirAll(announcementFolderPath, os.ModePerm); err != nil {
-				return err
-			}
-
-			announcementFilePath := filepath.Join(announcementFolderPath, "announcement.txt")
-			if err := saveAnnouncementText(announcementFilePath, announcement.Text); err != nil {
-				return err
-			}
-
-			downloadCompleteWG.Add(1)
-			go func(materials []models.Material, announcementFolderPath, token string) {
-				defer downloadCompleteWG.Done()
-
-				for _, material := range materials {
-					switch material.Type {
-					case "youtubeVideo", "link":
-						if err := saveLinkToFile(announcementFolderPath, material.URL); err != nil {
-							log.Printf("error saving link: %v", err)
-						}
-					case "driveFile":
-						semaphore <- struct{}{}
-						downloadCompleteWG.Add(1)
-						go func(material models.Material, announcementFolderPath, token string) {
-							defer func() { <-semaphore }()
-							defer downloadCompleteWG.Done()
-							saveDriveFile(material, announcementFolderPath, token)
-						}(material, announcementFolderPath, token)
-					}
-				}
-			}(announcement.Materials, announcementFolderPath, token)
-		}
+		courseDownloadItems := course.GetDownloadItems()
+		downloadItems = append(downloadItems, courseDownloadItems...)
 	}
 
-	downloadCompleteWG.Wait()
+	for _, item := range downloadItems {
+		item := item // Capture range variable
+		wg.Add(1)
+		go func(item models.DownloadItem, token string) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
+
+			if err := os.MkdirAll(item.DownloadFolderPath, os.ModePerm); err != nil {
+				log.Printf("error creating folder: %v", err)
+			}
+
+			// Save materials and download files
+			if err := saveDownloadItem(item, token); err != nil {
+				log.Printf("error saving materials: %v", err)
+			}
+		}(item, token)
+	}
+
+	wg.Wait()
+	log.Println("Finished downloading courses")
 	return nil
 }
 
-func saveAnnouncementText(filePath, text string) error {
+func saveDownloadItem(item models.DownloadItem, token string) error {
+	if item.Text != "" {
+		err := saveItemText(item.DownloadFolderPath, item.Text)
+		if err != nil {
+			log.Printf("error saving text: %v", err)
+		}
+	}
+
+	for _, material := range item.Materials {
+		switch material.Type {
+		case "youtubeVideo", "link":
+			if err := saveLinkToFile(item.DownloadFolderPath, material.URL); err != nil {
+				log.Printf("error saving link: %v", err)
+			}
+		case "driveFile":
+			if err := saveDriveFile(item.DownloadFolderPath, token, material); err != nil {
+				log.Printf("error saving drive file: %v", err)
+			}
+		}
+	}
+	return nil
+}
+
+func saveItemText(FolderPath, text string) error {
+	filePath := filepath.Join(FolderPath, "Announcement.txt")
 	file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
@@ -212,16 +265,26 @@ func saveLinkToFile(folderPath, link string) error {
 	return err
 }
 
-func saveDriveFile(material models.Material, folderPath string, token string) {
+func saveDriveFile(folderPath, token string, material models.Material) error {
 	filePath := filepath.Join(folderPath, material.Title)
 	fileID, err := database.GetDriveFileID(material.ID)
 	if err != nil {
 		log.Printf("error retrieving fileID: %v", err)
-		return
+		return err
+	}
+
+	if fileID == "" {
+		fileID, err = database.GetDriveFileIDByTitle(material.Title)
+		if err != nil {
+			log.Printf("error retrieving fileID from material Title: %v", err)
+			return err
+		}
 	}
 
 	err = utils.DownloadDriveFile(token, fileID, filePath)
 	if err != nil {
 		log.Printf("error downloading material: %v", err)
 	}
+
+	return nil
 }

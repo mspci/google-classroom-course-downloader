@@ -1,4 +1,4 @@
-module github.com/mspcix/google-classroom-downloader
+module github.com/mspcix/google-classroom-course-downloader
 
 go 1.20
 
