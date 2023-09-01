@@ -21,7 +21,7 @@ import (
 // Inserts them into the database
 func HandleDiscoverCourses(w http.ResponseWriter, r *http.Request, store sessions.Store) {
 	startDiscovery := time.Now()
-	log.Println("[HandleDiscoverCourses] /courses/discover hit")
+	log.Println("[HandleDiscoverCourses] hit")
 	token, err := database.GetTokenFromSession(r, store)
 	if err != nil {
 		log.Println("Error retrieving token from the database:", err)
@@ -108,8 +108,6 @@ func HandleListCourses(w http.ResponseWriter, r *http.Request, store sessions.St
 		return
 	}
 
-	log.Println("gcuid: ", gcuid)
-
 	courses, err := database.GetCoursesByGCUID(gcuid)
 	if err != nil || len(courses) == 0 {
 		fmt.Println("Error retrieving courses from the database:", err)
@@ -133,7 +131,7 @@ func HandleListCourses(w http.ResponseWriter, r *http.Request, store sessions.St
 // Handles request to initiate material download
 func HandleDownloadCourses(w http.ResponseWriter, r *http.Request, store sessions.Store) {
 	startDownload := time.Now()
-	log.Println("[HandleDownloadCourses] /courses/download hit")
+	log.Println("[HandleDownloadCourses] hit")
 	// Parse the request body to get selected courses
 	var requestBody struct {
 		SelectedCourses []string `json:"selectedCoursesIDs"`
@@ -164,7 +162,7 @@ func HandleDownloadCourses(w http.ResponseWriter, r *http.Request, store session
 // Deletes local folders
 func HandleServeCourses(w http.ResponseWriter, r *http.Request) {
 	startServe := time.Now()
-	log.Println("[HandleServeCourses] /courses/serve hit")
+	log.Println("[HandleServeCourses] hit")
 	// Remove the folder that was zipped
 	defer os.RemoveAll(utils.DownloadFolderPath)
 	// Remove the zip file
@@ -197,7 +195,7 @@ func HandleServeCourses(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=GCD_"+utils.ZIP_FILE_NAME)
 
 	// Set appropriate headers for cross-origin access
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+	w.Header().Set("Access-Control-Allow-Origin", os.Getenv("FRONTEND_URL"))
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept")
 

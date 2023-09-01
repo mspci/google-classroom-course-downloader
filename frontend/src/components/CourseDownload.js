@@ -8,7 +8,7 @@ const CourseDownload = ({ selectedCoursesIDs }) => {
     const handleDownload = async () => {
         try {
             setIsDownloading(true);
-            const response = await fetch('/courses/download', {
+            const response = await fetch('/api/courses/download', {
                 credentials: 'include',
                 method: 'POST',
                 headers: {
@@ -32,7 +32,7 @@ const CourseDownload = ({ selectedCoursesIDs }) => {
 
     const generateDownloadLink = () => {
         const downloadLink = document.createElement('a');
-        downloadLink.href = 'http://localhost:8080/courses/serve';
+        downloadLink.href = '/api/courses/serve';
         downloadLink.target = '_blank'; // Open in a new tab
         downloadLink.download = 'downloaded_courses.zip'; // Specify the download file name
         downloadLink.click();

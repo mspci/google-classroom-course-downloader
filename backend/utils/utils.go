@@ -68,7 +68,7 @@ func InitOauthConfig() error {
 	OAuthConfig = &oauth2.Config{
 		ClientID:     os.Getenv("GOOGLE_CLIENT_ID"),
 		ClientSecret: os.Getenv("GOOGLE_CLIENT_SECRET"),
-		RedirectURL:  os.Getenv("SERVER_URL") + "/oauth/callback",
+		RedirectURL:  os.Getenv("SERVER_URL") + os.Getenv("ROUTE_OAUTH_CALLBACK"),
 		Scopes: []string{`https://www.googleapis.com/auth/classroom.courses.readonly`,
 			`https://www.googleapis.com/auth/classroom.announcements.readonly`,
 			`https://www.googleapis.com/auth/classroom.coursework.me.readonly`,

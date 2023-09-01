@@ -12,7 +12,7 @@ const CourseSelection = ({ selectedCoursesIDs, onCourseSelection }) => {
 
     const fetchCourses = async () => {
         try {
-            const response = await fetch('http://localhost:8080/courses/list', {
+            const response = await fetch('/api/courses/list', {
                 credentials: 'include'
             });
             if (response.status === 401) {

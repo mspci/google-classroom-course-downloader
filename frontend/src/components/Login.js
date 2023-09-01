@@ -13,13 +13,13 @@ const Login = () => {
         try {
             setLoginError(null);
 
-            const response = await fetch('http://localhost:8080/', {
+            const response = await fetch('/api/', {
                 method: 'GET',
                 credentials: 'include',
             });
 
             if (response.status === 401) {
-                const authResponse = await fetch('http://localhost:8080/oauth/url');
+                const authResponse = await fetch('/api/oauth/url');
                 const authData = await authResponse.json();
                 window.location.href = authData.url
             } else {

@@ -3,6 +3,7 @@ package routes
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
@@ -11,14 +12,15 @@ import (
 type HandlerWStore func(http.ResponseWriter, *http.Request, sessions.Store)
 
 func SetupRoutes(r *mux.Router, store sessions.Store) {
-	r.HandleFunc("/", withStore(HandleHome, store))
-	r.HandleFunc("/oauth/url", withStore(HandleOAuthURL, store))
-	r.HandleFunc("/oauth/logout", withStore(HandleLogout, store))
-	r.HandleFunc("/oauth/callback", withStore(HandleOAuthCallback, store))
-	r.HandleFunc("/courses/discover", withStore(HandleDiscoverCourses, store))
-	r.HandleFunc("/courses/list", withStore(HandleListCourses, store))
-	r.HandleFunc("/courses/download", withStore(HandleDownloadCourses, store))
-	r.HandleFunc("/courses/serve", HandleServeCourses)
+	r.HandleFunc(os.Getenv("ROUTE_HOME"), withStore(HandleHome, store))
+	r.HandleFunc(os.Getenv("ROUTE_OAUTH_URL"), withStore(HandleOAuthURL, store))
+	r.HandleFunc(os.Getenv("ROUTE_OAUTH_LOGOUT"), withStore(HandleLogout, store))
+	r.HandleFunc(os.Getenv("ROUTE_OAUTH_CALLBACK"), withStore(HandleOAuthCallback, store))
+	r.HandleFunc(os.Getenv("ROUTE_COURSES_DISCOVER"), authMiddleware(withStore(HandleDiscoverCourses, store), store))
+	r.HandleFunc(os.Getenv("ROUTE_COURSES_LIST"), authMiddleware(withStore(HandleListCourses, store), store))
+	r.HandleFunc(os.Getenv("ROUTE_COURSES_DOWNLOAD"), authMiddleware(withStore(HandleDownloadCourses, store), store))
+	r.HandleFunc(os.Getenv("ROUTE_COURSES_SERVE"), authMiddleware(HandleServeCourses, store))
+
 }
 
 // Checks if the user is authenticated

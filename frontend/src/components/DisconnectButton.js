@@ -5,10 +5,16 @@ const DisconnectButton = () => {
   const navigate = useNavigate();
   const [error, setError] = useState(null);
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = () => {
+    setError(null);
+
     try {
-      await fetch('http://localhost:8080/oauth/logout', { method: 'POST', credentials: 'include' });
-      document.cookie = 'gcd_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      fetch('/api/oauth/logout', { method: 'POST', credentials: 'include' });
+
+      document.cookie = "gcd_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;"
+
+      console.log("document cookie: " + document.cookie)
+
       navigate('/');
     } catch (err) {
       setError(err.message);
@@ -16,10 +22,10 @@ const DisconnectButton = () => {
   };
 
   return (
-    <>
+    <div>
       <button onClick={handleDisconnect}>Disconnect</button>
       {error && <p style={{ color: 'red' }}>{error}</p>}
-    </>
+    </div>
   );
 };
 

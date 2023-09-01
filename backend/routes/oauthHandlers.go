@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/sessions"
 	_ "github.com/lib/pq"
@@ -24,10 +25,14 @@ func HandleOAuthURL(w http.ResponseWriter, r *http.Request, store sessions.Store
 	storedState = utils.GenerateRandomID(32)
 
 	url := utils.OAuthConfig.AuthCodeURL(storedState, oauth2.AccessTypeOffline)
+
+	// Redirect the user to the generated URL)
 	fmt.Fprintf(w, `{"url": "%s"}`, url)
 }
 
 func HandleOAuthCallback(w http.ResponseWriter, r *http.Request, store sessions.Store) {
+	log.Println("[HandleOAuthCallback] hit")
+
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 
@@ -64,15 +69,19 @@ func HandleOAuthCallback(w http.ResponseWriter, r *http.Request, store sessions.
 	session.Values["gcuid"] = user.GCUID
 	session.Save(r, w)
 
-	http.Redirect(w, r, "/courses/discover", http.StatusSeeOther)
+	http.Redirect(w, r, os.Getenv("ROUTE_COURSES_DISCOVER"), http.StatusSeeOther)
 }
 
 func HandleLogout(w http.ResponseWriter, r *http.Request, store sessions.Store) {
-	log.Println("[HandleLogout] /logout hit")
+	log.Println("[HandleLogout] hit")
 
-	session, _ := store.Get(r, "gcd_session")
+	w.Header().Set("Access-Control-Allow-Origin", os.Getenv("FRONTEND_URL"))
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 	// Delete the session data
+	session, _ := store.Get(r, "gcd_session")
+	session.Values["authenticated"] = false
+	session.Values["gcuid"] = ""
 	session.Options.MaxAge = -1
 	if err := session.Save(r, w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

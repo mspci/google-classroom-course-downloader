@@ -53,7 +53,7 @@ func main() {
 
 	// Apply CORS middleware to the router
 	corsMiddleware := cors.New(cors.Options{
-		AllowedOrigins: []string{os.Getenv("FRONTEND_URL"), os.Getenv("SERVER_URL"), os.Getenv("FRONTEND_COURSES_URL")},
+		AllowedOrigins: []string{os.Getenv("FRONTEND_URL")},
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders: []string{"Origin",
 			"Accept",
@@ -71,5 +71,6 @@ func main() {
 
 	fmt.Println("Server started at " + os.Getenv("SERVER_URL"))
 
-	http.ListenAndServe(":"+os.Getenv("SERVER_PORT"), nil)
+	log.Fatal(http.ListenAndServe(os.Getenv("SERVER_DOMAIN")+":"+
+		os.Getenv("SERVER_PORT"), corsMiddleware.Handler(r)))
 }
