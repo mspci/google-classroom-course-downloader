@@ -31,11 +31,11 @@ const CourseDownload = ({ selectedCoursesIDs }) => {
     };
 
     const generateDownloadLink = () => {
-        const downloadLink = document.createElement('a');
-        downloadLink.href = '/api/courses/serve';
-        downloadLink.target = '_blank'; // Open in a new tab
-        downloadLink.download = 'downloaded_courses.zip'; // Specify the download file name
-        downloadLink.click();
+        // const downloadLink = document.createElement('a');
+        // downloadLink.href = '/api/courses/serve';
+        // downloadLink.target = '_blank'; // Open in a new tab
+        // downloadLink.download = 'downloaded_courses.zip'; // Specify the download file name
+        // downloadLink.click();
     };
 
     return (

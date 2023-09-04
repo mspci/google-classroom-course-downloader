@@ -26,6 +26,7 @@ func InitDB() (*gorm.DB, error) {
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
 
+	// Remote database connection string
 	// connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=%s",
 	// 	os.Getenv("EDB_HOST"), os.Getenv("EDB_PORT"), os.Getenv("EDB_USER"), os.Getenv("EDB_PASSWORD"), os.Getenv("EDB_NAME"), os.Getenv("TIME_ZONE"))
 
@@ -33,7 +34,6 @@ func InitDB() (*gorm.DB, error) {
 	// 	os.Getenv("NDB_USER"), os.Getenv("NDB_PASSWORD"), os.Getenv("NDB_NAME"), os.Getenv("NDB_HOST"))
 
 	// Open a connection to the database using GORM
-
 	var err error
 	db, err = gorm.Open(postgres.New(postgres.Config{
 		DSN:                  connStr,

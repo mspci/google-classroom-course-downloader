@@ -147,7 +147,7 @@ func HandleDownloadCourses(w http.ResponseWriter, r *http.Request, store session
 		return
 	}
 
-	err = services.DownloadCourses(requestBody.SelectedCourses, token)
+	err = services.DownloadCourses(requestBody.SelectedCourses, &token)
 	if err != nil {
 		log.Printf("Error during download: %v\n", err)
 	}
@@ -189,6 +189,8 @@ func HandleServeCourses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer zipFile.Close()
+
+	log.Println("Serving zipped file...")
 
 	// Set appropriate headers
 	w.Header().Set("Content-Type", "application/zip")

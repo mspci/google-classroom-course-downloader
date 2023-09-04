@@ -94,7 +94,7 @@ func InitOauthConfig() error {
 
 func RemoveInvalidChars(fileName string) string {
 	// Define a regular expression pattern to match invalid characters
-	invalidCharPattern := regexp.MustCompile(`[<>:"'/\\|?*]`)
+	invalidCharPattern := regexp.MustCompile(`[<>:"'°/\\|?*]`)
 
 	// Replace invalid characters with an underscore
 	sanitizedFileName := invalidCharPattern.ReplaceAllString(fileName, "_")
@@ -105,11 +105,11 @@ func RemoveInvalidChars(fileName string) string {
 	return sanitizedFileName
 }
 
-func DownloadDriveFile(token, fileID, filePath string) error {
+func DownloadDriveFile(token *string, fileID, filePath string) error {
 	ctx := context.Background()
 
 	// Set up the Drive API client
-	client := getClient(ctx, token)
+	client := getClient(ctx, *token)
 
 	// Download the file content
 	resp, err := client.Files.Get(fileID).Download()

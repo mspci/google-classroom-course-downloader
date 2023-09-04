@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
+	"time"
 
 	"golang.org/x/oauth2"
 
@@ -174,14 +175,15 @@ func GetCourseWorkMaterials(r *http.Request, token string, courseIDs []string) (
 }
 
 // Download courses' materials from links in the database
-func DownloadCourses(coursesIDs []string, token string) error {
-	log.Println("Downloading courses...")
+func DownloadCourses(coursesIDs []string, token *string) error {
+	log.Printf("Downloading %v course(s)...", len(coursesIDs))
 	courses, err := database.GetCoursesByIDs(coursesIDs)
 	if err != nil {
 		return err
 	}
 
 	var wg sync.WaitGroup
+	var downloadItems []models.DownloadItem
 	maxConcurrentDownloadsStr := os.Getenv("MAX_CONCURRENT_DOWNLOADS")
 	maxConcurrentDownloads, err := strconv.Atoi(maxConcurrentDownloadsStr)
 	if err != nil {
@@ -189,17 +191,34 @@ func DownloadCourses(coursesIDs []string, token string) error {
 	}
 	semaphore := make(chan struct{}, maxConcurrentDownloads)
 
-	var downloadItems []models.DownloadItem
-
 	for _, course := range courses {
 		courseDownloadItems := course.GetDownloadItems()
 		downloadItems = append(downloadItems, courseDownloadItems...)
 	}
 
+	// Create a channel to signal when the download is complete
+	downloadCompleteCh := make(chan struct{})
+
+	// Start the token refreshing goroutine
+	go func() {
+		defer close(downloadCompleteCh)
+		ticker := time.NewTicker(20 * time.Minute) // Refresh token every 20 minutes
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				RefreshToken(token)
+			case <-downloadCompleteCh:
+				return
+			}
+		}
+	}()
+
 	for _, item := range downloadItems {
 		item := item // Capture range variable
 		wg.Add(1)
-		go func(item models.DownloadItem, token string) {
+		go func(item models.DownloadItem) {
 			defer wg.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
@@ -212,15 +231,20 @@ func DownloadCourses(coursesIDs []string, token string) error {
 			if err := saveDownloadItem(item, token); err != nil {
 				log.Printf("error saving materials: %v", err)
 			}
-		}(item, token)
+		}(item)
 	}
 
+	// Wait for downloads to complete
 	wg.Wait()
+
+	// Signal that the download is complete, stopping the token refreshing goroutine
+	downloadCompleteCh <- struct{}{}
+
 	log.Println("Finished downloading courses")
 	return nil
 }
 
-func saveDownloadItem(item models.DownloadItem, token string) error {
+func saveDownloadItem(item models.DownloadItem, token *string) error {
 	if item.Text != "" {
 		err := saveItemText(item.DownloadFolderPath, item.Text)
 		if err != nil {
@@ -265,8 +289,8 @@ func saveLinkToFile(folderPath, link string) error {
 	return err
 }
 
-func saveDriveFile(folderPath, token string, material models.Material) error {
-	filePath := filepath.Join(folderPath, material.Title)
+func saveDriveFile(folderPath string, token *string, material models.Material) error {
+	filePath := filepath.Join(folderPath, utils.RemoveInvalidChars(material.Title))
 	fileID, err := database.GetDriveFileID(material.ID)
 	if err != nil {
 		log.Printf("error retrieving fileID: %v", err)

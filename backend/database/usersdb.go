@@ -8,6 +8,7 @@ import (
 
 	"github.com/gorilla/sessions"
 	"github.com/mspcix/google-classroom-course-downloader/models"
+	"golang.org/x/oauth2"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +25,7 @@ func SaveUser(user models.User) error {
 
 	if user.Token != existingUser.Token {
 		log.Println("User exists in the database. Updating user's token...")
-		return updateUserToken(user)
+		return UpdateUserToken(user)
 	}
 
 	return nil
@@ -38,11 +39,12 @@ func insertUser(user models.User) error {
 	return nil
 }
 
-func updateUserToken(user models.User) error {
+func UpdateUserToken(user models.User) error {
 	result := db.Model(&models.User{}).Where("email = ?", user.Email).
 		Updates(map[string]interface{}{
-			"token":      user.Token,
-			"updated_at": time.Now(),
+			"token":         user.Token,
+			"refresh_token": user.RefreshToken,
+			"updated_at":    time.Now(),
 		})
 	if result.Error != nil {
 		return fmt.Errorf("error updating user in the database: %w", result.Error)
@@ -67,7 +69,7 @@ func GetUserByGCUID(gcuid string) (*models.User, error) {
 	}
 
 	// If the "users" table does not exist, return nil
-	return nil, fmt.Errorf("THE 'USERS' TABLE DOESN'T EXIST IN THE DATABASE. PlEASE, RESTART THE SERVER.")
+	return nil, fmt.Errorf("THE 'USERS' TABLE DOESN'T EXIST IN THE DATABASE. PlEASE, RESTART THE SERVER")
 }
 
 // Get user's token from session data
@@ -123,4 +125,36 @@ func GetGCUIDByToken(token string) (string, error) {
 	}
 
 	return "", fmt.Errorf("THE 'USERS' TABLE DOESN'T EXIST IN THE DATABASE")
+}
+
+func GetRefreshTokenByToken(token string) (string, error) {
+	var user models.User
+
+	migrator := db.Migrator()
+	if migrator.HasTable(&user) {
+		result := db.Select("refresh_token").Where("token = ?", token).First(&user)
+		if result.Error != nil {
+			if result.Error == gorm.ErrRecordNotFound {
+				return "", nil // User does not exist
+			}
+			return "", fmt.Errorf("error retrieving user from the database: %w", result.Error)
+		}
+		return user.RefreshToken, nil
+	}
+
+	return "", fmt.Errorf("THE 'USERS' TABLE DOESN'T EXIST IN THE DATABASE")
+}
+
+func UpdateToken(expiredToken string, newToken *oauth2.Token) error {
+	result := db.Model(&models.User{}).Where("token = ?", expiredToken).
+		Updates(map[string]interface{}{
+			"token":         newToken.AccessToken,
+			"token_expiry":  newToken.Expiry,
+			"refresh_token": newToken.RefreshToken,
+			"updated_at":    time.Now(),
+		})
+	if result.Error != nil {
+		return fmt.Errorf("error updating user in the database: %w", result.Error)
+	}
+	return nil
 }
