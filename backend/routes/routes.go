@@ -20,7 +20,6 @@ func SetupRoutes(r *mux.Router, store sessions.Store) {
 	r.HandleFunc(os.Getenv("ROUTE_COURSES_LIST"), authMiddleware(withStore(HandleListCourses, store), store))
 	r.HandleFunc(os.Getenv("ROUTE_COURSES_DOWNLOAD"), authMiddleware(withStore(HandleDownloadCourses, store), store))
 	r.HandleFunc(os.Getenv("ROUTE_COURSES_SERVE"), authMiddleware(HandleServeCourses, store))
-
 }
 
 // Checks if the user is authenticated

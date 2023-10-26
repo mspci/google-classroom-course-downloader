@@ -2,13 +2,12 @@ package database
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"github.com/mspcix/google-classroom-course-downloader/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"os"
 )
 
 var db *gorm.DB
@@ -23,15 +22,16 @@ func InitDB() (*gorm.DB, error) {
 	}
 
 	// Local database connection string
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
+	//connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+	//	os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_NAME"))
 
-	// Remote database connection string
-	// connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=%s",
-	// 	os.Getenv("EDB_HOST"), os.Getenv("EDB_PORT"), os.Getenv("EDB_USER"), os.Getenv("EDB_PASSWORD"), os.Getenv("EDB_NAME"), os.Getenv("TIME_ZONE"))
+	// ElephantSQL Remote database connection string
+	//connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=%s",
+	//	os.Getenv("EDB_HOST"), os.Getenv("EDB_PORT"), os.Getenv("EDB_USER"), os.Getenv("EDB_PASSWORD"), os.Getenv("EDB_NAME"), os.Getenv("TIME_ZONE"))
 
-	// connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=verify-full",
-	// 	os.Getenv("NDB_USER"), os.Getenv("NDB_PASSWORD"), os.Getenv("NDB_NAME"), os.Getenv("NDB_HOST"))
+	// NeonDB Remote database connection string
+	connStr := fmt.Sprintf("user=%s password=%s dbname=%s host=%s sslmode=verify-full",
+		os.Getenv("NDB_USER"), os.Getenv("NDB_PASSWORD"), os.Getenv("NDB_NAME"), os.Getenv("NDB_HOST"))
 
 	// Open a connection to the database using GORM
 	var err error
@@ -40,7 +40,8 @@ func InitDB() (*gorm.DB, error) {
 		PreferSimpleProtocol: true,
 	}), &gorm.Config{
 		SkipDefaultTransaction: true,
-		// Logger:                 utils.DBLogger.LoggerInterface,
+		//Logger:                 logger.Default.LogMode(logger.Info),
+		//Logger:                 utils.DBLogger.LoggerInterface,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to PostgreSQL: %w", err)
